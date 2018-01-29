@@ -31,28 +31,6 @@
 
 #include "mbed.h"
 
-enum DHTFamily {
-    DHT_11,
-    DHT_22
-};
-
-enum DHTError {
-    DHT_ERROR_NONE,
-    DHT_BUS_BUSY,
-    DHT_ERROR_NOT_PRESENT,
-    DHT_ERROR_ACK_TOO_LONG,
-    DHT_ERROR_SYNC_TIMEOUT,
-    DHT_ERROR_DATA_TIMEOUT,
-    DHT_ERROR_CHECKSUM,
-    DHT_ERROR_NO_PATIENCE,
-};
-
-enum DHTScale {
-    DHT_CELCIUS,
-    DHT_FARENHEIT,
-    DHT_KELVIN,
-};
-
 /** Read DHT11/22 humidity and temperature sensors
  * 
  * Example:
@@ -68,8 +46,8 @@ enum DHTScale {
  *     while(1) {
  *         wait(3);
  *         int err = sensor.read();
- *         if (err == DHT_ERROR_NONE) {
- *             printf("T: %.1f\r\n", sensor.getTemperature(DHT_CELCIUS));
+ *         if (err == DHT::SUCCESS) {
+ *             printf("T: %.1f\r\n", sensor.getTemperature(DHT::CELCIUS));
  *         } else {
  *             printf("Error code : %d\r\n", err);
  *         }
@@ -80,7 +58,30 @@ enum DHTScale {
 class DHT {
 
 public:
-    DHT(PinName pin, DHTFamily DHTtype);
+
+    enum Family {
+        DHT11,
+        DHT22
+    };
+
+    enum Status {
+        SUCCESS,
+        BUS_BUSY,
+        ERROR_NOT_PRESENT,
+        ERROR_ACK_TOO_LONG,
+        ERROR_SYNC_TIMEOUT,
+        ERROR_DATA_TIMEOUT,
+        ERROR_CHECKSUM,
+        ERROR_NO_PATIENCE,
+    };
+
+    enum Scale {
+        CELCIUS,
+        FARENHEIT,
+        KELVIN,
+    };
+
+    DHT(PinName pin, Family DHTtype);
     ~DHT();
 
     /** Read data on sensor
@@ -99,11 +100,11 @@ public:
 
     /** Get temperature from the last succesful read
     */
-    float getTemperature(DHTScale);
+    float getTemperature(Scale);
 
 private:
     PinName _pin;
-    DHTFamily _family;
+    Family _family;
     time_t  _lastReadTime;
     float _lastTemperature;
     float _lastHumidity;

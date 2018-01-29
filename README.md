@@ -20,8 +20,8 @@ int main(void) {
     while(1) {
         wait(3);
         int err = dht.read();
-        if (err == DHT_ERROR_NONE) {
-            printf("%.1f\r\n", dht.getTemperature(DHT_CELCIUS));
+        if (err == DHT::SUCCESS) {
+            printf("%.1f\r\n", dht.getTemperature(DHT::CELCIUS));
         } else {
             printf("Error code : %d\r\n", err);
         }

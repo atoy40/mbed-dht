@@ -45,14 +45,14 @@
         } \
     } while (dio == from);
 
-DHT::DHT(PinName pin, DHTFamily family) : _pin(pin), _family(family), _lastReadTime(-1) {
+DHT::DHT(PinName pin, Family family) : _pin(pin), _family(family), _lastReadTime(-1) {
 }
 
 DHT::~DHT() {
 }
 
 int DHT::read() {
-    int i, j, b;
+    int i, j;
     unsigned int timings[DHT_DATA_LENGTH] = { 0 };
     time_t currentTime;
     DigitalInOut dio(_pin);
@@ -62,7 +62,7 @@ int DHT::read() {
 
     if (_lastReadTime >= 0) {
         if (int(currentTime - _lastReadTime) < 2) {
-            return DHT_ERROR_NO_PATIENCE;
+            return ERROR_NO_PATIENCE;
         }
     } else {
         _lastReadTime = currentTime;
@@ -71,7 +71,7 @@ int DHT::read() {
     timer.start();
     
     // wait bus to be pulled-up
-    WAIT_PIN_CHANGE(0, 250, DHT_BUS_BUSY);
+    WAIT_PIN_CHANGE(0, 250, BUS_BUSY);
 
     // start signal : low 18ms then release the bus
     dio.output();
@@ -84,19 +84,19 @@ int DHT::read() {
     core_util_critical_section_enter();
 
     // bus pulled-up 20 to 40us
-    WAIT_PIN_CHANGE(1, 60, DHT_ERROR_NOT_PRESENT);
+    WAIT_PIN_CHANGE(1, 60, ERROR_NOT_PRESENT);
 
     // sensor start : 80us low + 80us pulled-up
-    WAIT_PIN_CHANGE(0, 100, DHT_ERROR_ACK_TOO_LONG);
-    WAIT_PIN_CHANGE(1, 100, DHT_ERROR_ACK_TOO_LONG);
+    WAIT_PIN_CHANGE(0, 100, ERROR_ACK_TOO_LONG);
+    WAIT_PIN_CHANGE(1, 100, ERROR_ACK_TOO_LONG);
 
     // read data (5x8bits)
     for (i = 0; i < 5; i++) {
         for (j = 0; j < 8; j++) {
             // sensor : 50us low
-            WAIT_PIN_CHANGE(0, 100, DHT_ERROR_SYNC_TIMEOUT);
+            WAIT_PIN_CHANGE(0, 100, ERROR_SYNC_TIMEOUT);
             // sensor : 26-28 (means 0) to 70us (means 1) high
-            MEASURE_PIN_CHANGE(1, timings[i*8+j], 100, DHT_ERROR_DATA_TIMEOUT);
+            MEASURE_PIN_CHANGE(1, timings[i*8+j], 100, ERROR_DATA_TIMEOUT);
         }
     }
 
@@ -106,19 +106,19 @@ int DHT::read() {
     timer.stop();
 
     for (i = 0; i < 5; i++) {
-        b=0;
-        for (j=0; j<8; j++) {
+        int val=0;
+        for (j = 0; j<8; j++) {
 #ifdef DHTDEBUG
             debug("%d ", timings[i*8+j]);
 #endif
             if (timings[i*8+j] >= 38) {
-                b |= ( 1 << (7-j));
+                val |= ( 1 << (7-j));
             }
         }
 #ifdef DHTDEBUG
         debug("\r\n");
 #endif
-        _data[i]=b;
+        _data[i] = val;
     }
 
 #ifdef DHTDEBUG
@@ -129,10 +129,10 @@ int DHT::read() {
         _lastTemperature = calcTemperature();
         _lastHumidity = calcHumidity();
     } else {
-        return DHT_ERROR_CHECKSUM;
+        return ERROR_CHECKSUM;
     }
 
-    return DHT_ERROR_NONE;
+    return SUCCESS;
 
 }
 
@@ -144,10 +144,10 @@ float DHT::calcTemperature() {
     int v;
 
     switch (_family) {
-        case DHT_11:
+        case DHT11:
             v = _data[2];
             return float(v);
-        case DHT_22:
+        case DHT22:
             v = _data[2] & 0x7F;
             v *= 256;
             v += _data[3];
@@ -162,10 +162,10 @@ float DHT::calcHumidity() {
     int v;
 
     switch (_family) {
-        case DHT_11:
+        case DHT11:
             v = _data[0];
             return float(v);
-        case DHT_22:
+        case DHT22:
             v = _data[0];
             v *= 256;
             v += _data[1];
@@ -182,10 +182,10 @@ float DHT::toKelvin(float celsius) {
     return celsius + 273.15;
 }
 
-float DHT::getTemperature(DHTScale scale) {
-    if (scale == DHT_FARENHEIT)
+float DHT::getTemperature(Scale scale) {
+    if (scale == FARENHEIT)
         return toFarenheit(_lastTemperature);
-    else if (scale == DHT_KELVIN)
+    else if (scale == KELVIN)
         return toKelvin(_lastTemperature);
     else
         return _lastTemperature;
