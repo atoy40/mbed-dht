@@ -21,7 +21,7 @@ int main(void) {
         wait(3);
         int err = dht.read();
         if (err == DHT::SUCCESS) {
-            printf("%.1f\r\n", dht.getTemperature(DHT::CELCIUS));
+            printf("T = %.1f°C\r\n", dht.getTemperature());
         } else {
             printf("Error code : %d\r\n", err);
         }

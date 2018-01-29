@@ -62,7 +62,7 @@ int DHT::read() {
 
     if (_lastReadTime >= 0) {
         if (int(currentTime - _lastReadTime) < 2) {
-            return ERROR_NO_PATIENCE;
+            return ERROR_TOO_FAST;
         }
     } else {
         _lastReadTime = currentTime;
@@ -71,7 +71,7 @@ int DHT::read() {
     timer.start();
     
     // wait bus to be pulled-up
-    WAIT_PIN_CHANGE(0, 250, BUS_BUSY);
+    WAIT_PIN_CHANGE(0, 250, ERROR_BUS_BUSY);
 
     // start signal : low 18ms then release the bus
     dio.output();
@@ -84,11 +84,11 @@ int DHT::read() {
     core_util_critical_section_enter();
 
     // bus pulled-up 20 to 40us
-    WAIT_PIN_CHANGE(1, 60, ERROR_NOT_PRESENT);
+    WAIT_PIN_CHANGE(1, 60, ERROR_NOT_DETECTED);
 
     // sensor start : 80us low + 80us pulled-up
-    WAIT_PIN_CHANGE(0, 100, ERROR_ACK_TOO_LONG);
-    WAIT_PIN_CHANGE(1, 100, ERROR_ACK_TOO_LONG);
+    WAIT_PIN_CHANGE(0, 100, ERROR_BAD_START);
+    WAIT_PIN_CHANGE(1, 100, ERROR_BAD_START);
 
     // read data (5x8bits)
     for (i = 0; i < 5; i++) {
@@ -129,7 +129,7 @@ int DHT::read() {
         _lastTemperature = calcTemperature();
         _lastHumidity = calcHumidity();
     } else {
-        return ERROR_CHECKSUM;
+        return ERROR_BAD_CHECKSUM;
     }
 
     return SUCCESS;
@@ -182,10 +182,10 @@ float DHT::toKelvin(float celsius) {
     return celsius + 273.15;
 }
 
-float DHT::getTemperature(Scale scale) {
-    if (scale == FARENHEIT)
+float DHT::getTemperature(Unit unit) {
+    if (unit == FARENHEIT)
         return toFarenheit(_lastTemperature);
-    else if (scale == KELVIN)
+    else if (unit == KELVIN)
         return toKelvin(_lastTemperature);
     else
         return _lastTemperature;

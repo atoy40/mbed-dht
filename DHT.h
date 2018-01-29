@@ -66,16 +66,16 @@ public:
 
     enum Status {
         SUCCESS,
-        BUS_BUSY,
-        ERROR_NOT_PRESENT,
-        ERROR_ACK_TOO_LONG,
+        ERROR_BUS_BUSY,
+        ERROR_NOT_DETECTED,
+        ERROR_BAD_START,
         ERROR_SYNC_TIMEOUT,
         ERROR_DATA_TIMEOUT,
-        ERROR_CHECKSUM,
-        ERROR_NO_PATIENCE,
+        ERROR_BAD_CHECKSUM,
+        ERROR_TOO_FAST,
     };
 
-    enum Scale {
+    enum Unit {
         CELCIUS,
         FARENHEIT,
         KELVIN,
@@ -100,7 +100,7 @@ public:
 
     /** Get temperature from the last succesful read
     */
-    float getTemperature(Scale);
+    float getTemperature(Unit unit = CELCIUS);
 
 private:
     PinName _pin;
