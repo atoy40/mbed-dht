@@ -1,11 +1,8 @@
 /*
- *  DHT Library for  Digital-output Humidity and Temperature sensors
+ *  DHT Library for Digital-output Humidity and Temperature sensors
  *
- *  Works with DHT11, DHT22
- *             SEN11301P,  Grove - Temperature&Humidity Sensor     (Seeed Studio)
- *             SEN51035P,  Grove - Temperature&Humidity Sensor Pro (Seeed Studio)
- *             AM2302   ,  temperature-humidity sensor
- *             HM2303   ,  Digital-output humidity and temperature sensor
+ *  Tested with DHT11, DHT22
+ *  Compatible with SEN11301P, SEN51035P, AM2302, HM2303
  *
  *  Copyright (C) Anthony Hinsinger
  *                Inspired from Wim De Roeve MBED library code
@@ -38,7 +35,7 @@
         if (timer.read_us() > timeout) { \
             return err; \
         } \
-    } while (DHT_io == from);
+    } while (dio == from);
 
 #define MEASURE_PIN_CHANGE(from, elapsed, timeout, err) timer.reset(); \
     do { \
@@ -46,9 +43,9 @@
         if (elapsed > timeout) { \
             return err; \
         } \
-    } while (DHT_io == from);
+    } while (dio == from);
 
-DHT::DHT(PinName pin,int DHTtype) : _pin(pin), _DHTtype(DHTtype), _lastReadTime(-1) {
+DHT::DHT(PinName pin, DHTFamily family) : _pin(pin), _family(family), _lastReadTime(-1) {
 }
 
 DHT::~DHT() {
@@ -56,16 +53,16 @@ DHT::~DHT() {
 
 int DHT::read() {
     int i, j, b;
-    unsigned int bitTimes[DHT_DATA_LENGTH] = {0};
+    unsigned int timings[DHT_DATA_LENGTH] = { 0 };
     time_t currentTime;
-    DigitalInOut DHT_io(_pin);
+    DigitalInOut dio(_pin);
     Timer timer;
 
     currentTime = time(NULL);
 
     if (_lastReadTime >= 0) {
         if (int(currentTime - _lastReadTime) < 2) {
-            return ERROR_NO_PATIENCE;
+            return DHT_ERROR_NO_PATIENCE;
         }
     } else {
         _lastReadTime = currentTime;
@@ -73,35 +70,37 @@ int DHT::read() {
 
     timer.start();
     
-    // wait bus to be pull-up
-    WAIT_PIN_CHANGE(0, 250, BUS_BUSY);
+    // wait bus to be pulled-up
+    WAIT_PIN_CHANGE(0, 250, DHT_BUS_BUSY);
 
-    // start signal : low 18ms
-    DHT_io.output();
-    DHT_io = 0;
+    // start signal : low 18ms then release the bus
+    dio.output();
+    dio = 0;
     wait_ms(18);
-    DHT_io = 1;
-    DHT_io.input();
+    dio = 1;
+    dio.input();
 
+    // next steps are timing-dependents
     core_util_critical_section_enter();
 
-    // pull-up 20 to 40us
-    WAIT_PIN_CHANGE(1, 60, ERROR_NOT_PRESENT);
+    // bus pulled-up 20 to 40us
+    WAIT_PIN_CHANGE(1, 60, DHT_ERROR_NOT_PRESENT);
 
-    // sensor start : 80us low + 80us pull-up
-    WAIT_PIN_CHANGE(0, 100, ERROR_ACK_TOO_LONG);
-    WAIT_PIN_CHANGE(1, 100, ERROR_ACK_TOO_LONG);
+    // sensor start : 80us low + 80us pulled-up
+    WAIT_PIN_CHANGE(0, 100, DHT_ERROR_ACK_TOO_LONG);
+    WAIT_PIN_CHANGE(1, 100, DHT_ERROR_ACK_TOO_LONG);
 
     // read data (5x8bits)
     for (i = 0; i < 5; i++) {
         for (j = 0; j < 8; j++) {
             // sensor : 50us low
-            WAIT_PIN_CHANGE(0, 100, ERROR_SYNC_TIMEOUT);
-            // sensor : 26-28 (means 0) to 70us (means 1) pull-up
-            MEASURE_PIN_CHANGE(1, bitTimes[i*8+j], 100, ERROR_DATA_TIMEOUT);
+            WAIT_PIN_CHANGE(0, 100, DHT_ERROR_SYNC_TIMEOUT);
+            // sensor : 26-28 (means 0) to 70us (means 1) high
+            MEASURE_PIN_CHANGE(1, timings[i*8+j], 100, DHT_ERROR_DATA_TIMEOUT);
         }
     }
 
+    // reading done
     core_util_critical_section_exit();
 
     timer.stop();
@@ -110,49 +109,49 @@ int DHT::read() {
         b=0;
         for (j=0; j<8; j++) {
 #ifdef DHTDEBUG
-            debug("%d ", bitTimes[i*8+j]);
+            debug("%d ", timings[i*8+j]);
 #endif
-            if (bitTimes[i*8+j] >= 38) {
+            if (timings[i*8+j] >= 38) {
                 b |= ( 1 << (7-j));
             }
         }
 #ifdef DHTDEBUG
         debug("\r\n");
 #endif
-        DHT_data[i]=b;
+        _data[i]=b;
     }
 
 #ifdef DHTDEBUG
-    debug("%02x %02x %02x %02x %02x\r\n", DHT_data[0], DHT_data[1], DHT_data[2], DHT_data[3], DHT_data[4]);
+    debug("%02x %02x %02x %02x %02x\r\n", _data[0], _data[1], _data[2], _data[3], _data[4]);
 #endif
 
-    if (DHT_data[4] == ((DHT_data[0] + DHT_data[1] + DHT_data[2] + DHT_data[3]) & 0xFF)) {
+    if (_data[4] == ((_data[0] + _data[1] + _data[2] + _data[3]) & 0xFF)) {
         _lastTemperature = calcTemperature();
         _lastHumidity = calcHumidity();
     } else {
-        return ERROR_CHECKSUM;
+        return DHT_ERROR_CHECKSUM;
     }
 
-    return ERROR_NONE;
+    return DHT_ERROR_NONE;
 
 }
 
 int* DHT::getRawData() {
-    return DHT_data;
+    return _data;
 }
 
 float DHT::calcTemperature() {
     int v;
 
-    switch (_DHTtype) {
-        case DHT11:
-            v = DHT_data[2];
+    switch (_family) {
+        case DHT_11:
+            v = _data[2];
             return float(v);
-        case DHT22:
-            v = DHT_data[2] & 0x7F;
+        case DHT_22:
+            v = _data[2] & 0x7F;
             v *= 256;
-            v += DHT_data[3];
-            if (DHT_data[2] & 0x80)
+            v += _data[3];
+            if (_data[2] & 0x80)
                 v *= -1;
             return float(v)/10;
     }
@@ -162,16 +161,15 @@ float DHT::calcTemperature() {
 float DHT::calcHumidity() {
     int v;
 
-    switch (_DHTtype) {
-        case DHT11:
-            v = DHT_data[0];
+    switch (_family) {
+        case DHT_11:
+            v = _data[0];
             return float(v);
-        case DHT22:
-            v = DHT_data[0];
+        case DHT_22:
+            v = _data[0];
             v *= 256;
-            v += DHT_data[1];
-            v /= 10;
-            return float(v);
+            v += _data[1];
+            return float(v)/10;
     }
     return 0;
 }
@@ -184,10 +182,10 @@ float DHT::toKelvin(float celsius) {
     return celsius + 273.15;
 }
 
-float DHT::getTemperature(eScale Scale) {
-    if (Scale == FARENHEIT)
+float DHT::getTemperature(DHTScale scale) {
+    if (scale == DHT_FARENHEIT)
         return toFarenheit(_lastTemperature);
-    else if (Scale == KELVIN)
+    else if (scale == DHT_KELVIN)
         return toKelvin(_lastTemperature);
     else
         return _lastTemperature;

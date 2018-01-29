@@ -1,10 +1,11 @@
-/* 
- *  DHT Library for  DHT Humidity and Temperature sensors 
- *  
+/*
+ *  DHT Library for Digital-output Humidity and Temperature sensors
+ *
  *  Tested with DHT11, DHT22
+ *  Compatible with SEN11301P, SEN51035P, AM2302, HM2303
  *
  *  Copyright (C) Anthony Hinsinger
- *                Inspired from Wim De Roeve code
+ *                Inspired from Wim De Roeve MBED library code
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documnetation files (the "Software"), to deal
@@ -25,57 +26,88 @@
  * THE SOFTWARE.
  */
 
-#ifndef MBED_DHT_H
-#define MBED_DHT_H
+#ifndef _DHT_H_
+#define _DHT_H_
 
 #include "mbed.h"
 
-enum eType {
-    DHT11     = 11,
-    SEN11301P = 11,
-    RHT01     = 11,
-    DHT22     = 22,
-    AM2302    = 22,
-    SEN51035P = 22,
-    RHT02     = 22,
-    RHT03     = 22
-} ;
+enum DHTFamily {
+    DHT_11,
+    DHT_22
+};
 
-enum eError {
-    ERROR_NONE = 0,
-    BUS_BUSY = 1,
-    ERROR_NOT_PRESENT = 2,
-    ERROR_ACK_TOO_LONG = 3,
-    ERROR_SYNC_TIMEOUT = 4,
-    ERROR_DATA_TIMEOUT = 5,
-    ERROR_CHECKSUM = 6,
-    ERROR_NO_PATIENCE = 7
-} ;
+enum DHTError {
+    DHT_ERROR_NONE,
+    DHT_BUS_BUSY,
+    DHT_ERROR_NOT_PRESENT,
+    DHT_ERROR_ACK_TOO_LONG,
+    DHT_ERROR_SYNC_TIMEOUT,
+    DHT_ERROR_DATA_TIMEOUT,
+    DHT_ERROR_CHECKSUM,
+    DHT_ERROR_NO_PATIENCE,
+};
 
-typedef enum {
-    CELCIUS = 0,
-    FARENHEIT = 1,
-    KELVIN = 2
-} eScale;
+enum DHTScale {
+    DHT_CELCIUS,
+    DHT_FARENHEIT,
+    DHT_KELVIN,
+};
 
-
+/** Read DHT11/22 humidity and temperature sensors
+ * 
+ * Example:
+ * @code
+ * // read DHT22 every 3 minutes
+ *
+ * #include "mbed.h"
+ * #include "DHT.h"
+ * 
+ * DHT sensor(D8, DHT_22);
+ *
+ * int main(void) {
+ *     while(1) {
+ *         wait(3);
+ *         int err = sensor.read();
+ *         if (err == DHT_ERROR_NONE) {
+ *             printf("T: %.1f\r\n", sensor.getTemperature(DHT_CELCIUS));
+ *         } else {
+ *             printf("Error code : %d\r\n", err);
+ *         }
+ *     }
+ * }
+ * @endcode
+ */
 class DHT {
 
 public:
-    DHT(PinName pin, int DHTtype);
+    DHT(PinName pin, DHTFamily DHTtype);
     ~DHT();
+
+    /** Read data on sensor
+     * 
+     * @returns an error code. See ::DHTError
+     */
     int read(void);
+
+    /** Get pointer to raw data (can be useful to send it througt a low-power WAN)
+    */
     int* getRawData();
+
+    /** Get humidity from the last succesful read
+    */
     float getHumidity(void);
-    float getTemperature(eScale Scale);
+
+    /** Get temperature from the last succesful read
+    */
+    float getTemperature(DHTScale);
 
 private:
     PinName _pin;
-    int _DHTtype;
+    DHTFamily _family;
     time_t  _lastReadTime;
     float _lastTemperature;
     float _lastHumidity;
-    int DHT_data[6];
+    int _data[5];
     float calcTemperature();
     float calcHumidity();
     float toFarenheit(float);
