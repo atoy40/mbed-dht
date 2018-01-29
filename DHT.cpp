@@ -8,7 +8,7 @@
  *             HM2303   ,  Digital-output humidity and temperature sensor
  *
  *  Copyright (C) Anthony Hinsinger
- *                Started from Wim De Roeve code
+ *                Inspired from Wim De Roeve MBED library code
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documnetation files (the "Software"), to deal
@@ -31,14 +31,14 @@
 
 #include "DHT.h"
 
-#define DHT_DATA_BIT_COUNT 41
+#define DHT_DATA_LENGTH 40
 
 #define WAIT_PIN_CHANGE(from, timeout, err) timer.reset(); \
     do { \
         if (timer.read_us() > timeout) { \
             return err; \
         } \
-    } while (DHT_io==from);
+    } while (DHT_io == from);
 
 #define MEASURE_PIN_CHANGE(from, elapsed, timeout, err) timer.reset(); \
     do { \
@@ -46,42 +46,46 @@
         if (elapsed > timeout) { \
             return err; \
         } \
-    } while (DHT_io==from);
+    } while (DHT_io == from);
 
-DHT::DHT(PinName pin,int DHTtype) : _pin(pin), _firsttime(true), _DHTtype(DHTtype) {
+DHT::DHT(PinName pin,int DHTtype) : _pin(pin), _DHTtype(DHTtype), _lastReadTime(-1) {
 }
 
 DHT::~DHT() {
 }
 
-int DHT::readData() {
+int DHT::read() {
     int i, j, b;
-    unsigned int bitTimes[DHT_DATA_BIT_COUNT] = {0};
-    time_t currentTime = time(NULL);
+    unsigned int bitTimes[DHT_DATA_LENGTH] = {0};
+    time_t currentTime;
     DigitalInOut DHT_io(_pin);
     Timer timer;
 
-    if (!_firsttime) {
+    currentTime = time(NULL);
+
+    if (_lastReadTime >= 0) {
         if (int(currentTime - _lastReadTime) < 2) {
             return ERROR_NO_PATIENCE;
         }
     } else {
-        _firsttime=false;
-        _lastReadTime=currentTime;
+        _lastReadTime = currentTime;
     }
 
     timer.start();
-    core_util_critical_section_enter();
     
     // wait bus to be pull-up
     WAIT_PIN_CHANGE(0, 250, BUS_BUSY);
 
-    // start signal : low 18ms + pull-up 20 to 40us
+    // start signal : low 18ms
     DHT_io.output();
     DHT_io = 0;
     wait_ms(18);
     DHT_io = 1;
     DHT_io.input();
+
+    core_util_critical_section_enter();
+
+    // pull-up 20 to 40us
     WAIT_PIN_CHANGE(1, 60, ERROR_NOT_PRESENT);
 
     // sensor start : 80us low + 80us pull-up
@@ -99,25 +103,32 @@ int DHT::readData() {
     }
 
     core_util_critical_section_exit();
+
     timer.stop();
 
     for (i = 0; i < 5; i++) {
         b=0;
         for (j=0; j<8; j++) {
+#ifdef DHTDEBUG
             debug("%d ", bitTimes[i*8+j]);
+#endif
             if (bitTimes[i*8+j] >= 38) {
                 b |= ( 1 << (7-j));
             }
         }
+#ifdef DHTDEBUG
         debug("\r\n");
+#endif
         DHT_data[i]=b;
     }
 
+#ifdef DHTDEBUG
     debug("%02x %02x %02x %02x %02x\r\n", DHT_data[0], DHT_data[1], DHT_data[2], DHT_data[3], DHT_data[4]);
+#endif
 
     if (DHT_data[4] == ((DHT_data[0] + DHT_data[1] + DHT_data[2] + DHT_data[3]) & 0xFF)) {
-        _lastTemperature=CalcTemperature();
-        _lastHumidity=CalcHumidity();
+        _lastTemperature = calcTemperature();
+        _lastHumidity = calcHumidity();
     } else {
         return ERROR_CHECKSUM;
     }
@@ -126,11 +137,11 @@ int DHT::readData() {
 
 }
 
-int* DHT::rawData() {
+int* DHT::getRawData() {
     return DHT_data;
 }
 
-float DHT::CalcTemperature() {
+float DHT::calcTemperature() {
     int v;
 
     switch (_DHTtype) {
@@ -148,54 +159,7 @@ float DHT::CalcTemperature() {
     return 0;
 }
 
-float DHT::ReadHumidity() {
-    return _lastHumidity;
-}
-
-float DHT::ConvertCelciustoFarenheit(float celsius) {
-    return celsius * 9 / 5 + 32;
-}
-
-float DHT::ConvertCelciustoKelvin(float celsius) {
-    return celsius + 273.15;
-}
-
-// dewPoint function NOAA
-// reference: http://wahiduddin.net/calc/density_algorithms.htm
-float DHT::CalcdewPoint(float celsius, float humidity) {
-    float A0= 373.15/(273.15 + celsius);
-    float SUM = -7.90298 * (A0-1);
-    SUM += 5.02808 * log10(A0);
-    SUM += -1.3816e-7 * (pow(10, (11.344*(1-1/A0)))-1) ;
-    SUM += 8.1328e-3 * (pow(10,(-3.49149*(A0-1)))-1) ;
-    SUM += log10(1013.246);
-    float VP = pow(10, SUM-3) * humidity;
-    float T = log(VP/0.61078);   // temp var
-    return (241.88 * T) / (17.558-T);
-}
-
-// delta max = 0.6544 wrt dewPoint()
-// 5x faster than dewPoint()
-// reference: http://en.wikipedia.org/wiki/Dew_point
-float DHT::CalcdewPointFast(float celsius, float humidity)
-{
-        float a = 17.271;
-        float b = 237.7;
-        float temp = (a * celsius) / (b + celsius) + log(humidity/100);
-        float Td = (b * temp) / (a - temp);
-        return Td;
-}
-
-float DHT::ReadTemperature(eScale Scale) {
-    if (Scale == FARENHEIT)
-        return ConvertCelciustoFarenheit(_lastTemperature);
-    else if (Scale == KELVIN)
-        return ConvertCelciustoKelvin(_lastTemperature);
-    else
-        return _lastTemperature;
-}
-
-float DHT::CalcHumidity() {
+float DHT::calcHumidity() {
     int v;
 
     switch (_DHTtype) {
@@ -212,4 +176,23 @@ float DHT::CalcHumidity() {
     return 0;
 }
 
+float DHT::toFarenheit(float celsius) {
+    return celsius * 9 / 5 + 32;
+}
 
+float DHT::toKelvin(float celsius) {
+    return celsius + 273.15;
+}
+
+float DHT::getTemperature(eScale Scale) {
+    if (Scale == FARENHEIT)
+        return toFarenheit(_lastTemperature);
+    else if (Scale == KELVIN)
+        return toKelvin(_lastTemperature);
+    else
+        return _lastTemperature;
+}
+
+float DHT::getHumidity() {
+    return _lastHumidity;
+}

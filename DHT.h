@@ -1,14 +1,10 @@
 /* 
- *  DHT Library for  Digital-output Humidity and Temperature sensors 
+ *  DHT Library for  DHT Humidity and Temperature sensors 
  *  
- *  Works with DHT11, DHT21, DHT22
- *             SEN11301P,  Grove - Temperature&Humidity Sensor     (Seeed Studio)
- *             SEN51035P,  Grove - Temperature&Humidity Sensor Pro (Seeed Studio)
- *             AM2302   ,  temperature-humidity sensor    
- *             RHT01,RHT02, RHT03    ,  Humidity and Temperature Sensor         (Sparkfun)
+ *  Tested with DHT11, DHT22
  *
  *  Copyright (C) Anthony Hinsinger
- *                Started from Wim De Roeve code
+ *                Inspired from Wim De Roeve code
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documnetation files (the "Software"), to deal
@@ -34,16 +30,16 @@
 
 #include "mbed.h"
 
-enum eType{
-        DHT11     = 11,
-        SEN11301P = 11,
-        RHT01     = 11,
-        DHT22     = 22,
-        AM2302    = 22,
-        SEN51035P = 22,
-        RHT02     = 22,
-        RHT03     = 22
-    } ;
+enum eType {
+    DHT11     = 11,
+    SEN11301P = 11,
+    RHT01     = 11,
+    DHT22     = 22,
+    AM2302    = 22,
+    SEN51035P = 22,
+    RHT02     = 22,
+    RHT03     = 22
+} ;
 
 enum eError {
     ERROR_NONE = 0,
@@ -66,27 +62,24 @@ typedef enum {
 class DHT {
 
 public:
-    DHT(PinName pin,int DHTtype);
+    DHT(PinName pin, int DHTtype);
     ~DHT();
-    int readData(void);
-    int* rawData();
-    float ReadHumidity(void);
-    float ReadTemperature(eScale Scale);
-    float CalcdewPoint(float celsius, float humidity);
-    float CalcdewPointFast(float celsius, float humidity);
+    int read(void);
+    int* getRawData();
+    float getHumidity(void);
+    float getTemperature(eScale Scale);
 
 private:
+    PinName _pin;
+    int _DHTtype;
     time_t  _lastReadTime;
     float _lastTemperature;
     float _lastHumidity;
-    PinName _pin;
-    bool _firsttime;
-    int _DHTtype;
     int DHT_data[6];
-    float CalcTemperature();
-    float CalcHumidity();
-    float ConvertCelciustoFarenheit(float);
-    float ConvertCelciustoKelvin(float);
+    float calcTemperature();
+    float calcHumidity();
+    float toFarenheit(float);
+    float toKelvin(float);
 
 };
 
