@@ -40,7 +40,7 @@
  * #include "mbed.h"
  * #include "DHT.h"
  * 
- * DHT sensor(D8, DHT_22);
+ * DHT sensor(D8, DHT::DHT22);
  *
  * int main(void) {
  *     while(1) {

@@ -14,7 +14,7 @@ Add the library to your project using mbed CLI (or directly through online IDE):
 #include "mbed.h"
 #include "DHT.h"
 
-DHT dht(D8, DHT_22);
+DHT dht(D8, DHT::DHT22);
 
 int main(void) {
     while(1) {
