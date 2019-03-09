@@ -71,7 +71,7 @@ int DHT::read() {
     timer.start();
     
     // wait bus to be pulled-up
-    WAIT_PIN_CHANGE(0, 250, ERROR_BUS_BUSY);
+    WAIT_PIN_CHANGE(0, 500, ERROR_BUS_BUSY);
 
     // start signal : low 18ms then release the bus
     dio.output();
