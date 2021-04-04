@@ -76,7 +76,7 @@ int DHT::read() {
     // start signal : low 18ms then release the bus
     dio.output();
     dio = 0;
-    wait_ms(18);
+    wait_us(18000);
     dio = 1;
     dio.input();
 
