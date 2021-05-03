@@ -30,38 +30,42 @@
 
 #define DHT_DATA_LENGTH 40
 
-#define WAIT_PIN_CHANGE(from, timeout, err) timer.reset(); \
-    do { \
-        if (timer.read_us() > timeout) { \
-            return err; \
-        } \
-    } while (dio == from);
+#define WAIT_PIN_CHANGE(from, timeout, err)          \
+    timer.reset();                                   \
+    do {                                             \
+        if(timer.elapsed_time().count() > timeout) { \
+            error = err;                             \
+            goto read_error;                         \
+        }                                            \
+    } while(dio == from);
 
-#define MEASURE_PIN_CHANGE(from, elapsed, timeout, err) timer.reset(); \
-    do { \
-        elapsed = timer.read_us(); \
-        if (elapsed > timeout) { \
-            return err; \
-        } \
-    } while (dio == from);
+#define MEASURE_PIN_CHANGE(from, elapsed, timeout, err) \
+    timer.reset();                                      \
+    do {                                                \
+        elapsed = timer.elapsed_time().count();         \
+        if(elapsed > timeout) {                         \
+            error = err;                                \
+            goto read_error;                            \
+        }                                               \
+    } while(dio == from);
 
-DHT::DHT(PinName pin, Family family) : _pin(pin), _family(family), _lastReadTime(-1) {
-}
+DHT::DHT(PinName pin, Family family) : _pin(pin), _family(family), _lastReadTime(-1) {}
 
-DHT::~DHT() {
-}
+DHT::~DHT() {}
 
 int DHT::read() {
-    int i, j;
-    unsigned int timings[DHT_DATA_LENGTH] = { 0 };
+    Status error = SUCCESS;
+    int i = 0, j = 0;
+    unsigned int time1, time2, time3;
+    unsigned int timings[DHT_DATA_LENGTH] = {0};
     time_t currentTime;
     DigitalInOut dio(_pin);
     Timer timer;
 
     currentTime = time(NULL);
 
-    if (_lastReadTime >= 0) {
-        if (int(currentTime - _lastReadTime) < 2) {
+    if(_lastReadTime >= 0) {
+        if(int(currentTime - _lastReadTime) < 2) {
             return ERROR_TOO_FAST;
         }
     } else {
@@ -69,14 +73,14 @@ int DHT::read() {
     }
 
     timer.start();
-    
+
     // wait bus to be pulled-up
     WAIT_PIN_CHANGE(0, 500, ERROR_BUS_BUSY);
 
     // start signal : low 18ms then release the bus
     dio.output();
     dio = 0;
-    wait_us(18000);
+    ThisThread::sleep_for(18ms);
     dio = 1;
     dio.input();
 
@@ -91,28 +95,34 @@ int DHT::read() {
     WAIT_PIN_CHANGE(1, 100, ERROR_BAD_START);
 
     // read data (5x8bits)
-    for (i = 0; i < 5; i++) {
-        for (j = 0; j < 8; j++) {
+    for(i = 0; i < 5; i++) {
+        for(j = 0; j < 8; j++) {
             // sensor : 50us low
             WAIT_PIN_CHANGE(0, 100, ERROR_SYNC_TIMEOUT);
+
             // sensor : 26-28 (means 0) to 70us (means 1) high
-            MEASURE_PIN_CHANGE(1, timings[i*8+j], 100, ERROR_DATA_TIMEOUT);
+            MEASURE_PIN_CHANGE(1, timings[i * 8 + j], 100, ERROR_DATA_TIMEOUT);
         }
     }
 
-    // reading done
+read_error:
+    // reading done (or failed...)
     core_util_critical_section_exit();
 
     timer.stop();
 
-    for (i = 0; i < 5; i++) {
-        int val=0;
-        for (j = 0; j<8; j++) {
+    if(error) {
+        return error;
+    }
+
+    for(i = 0; i < 5; i++) {
+        int val = 0;
+        for(j = 0; j < 8; j++) {
 #ifdef DHTDEBUG
-            debug("%d ", timings[i*8+j]);
+            debug("%d ", timings[i * 8 + j]);
 #endif
-            if (timings[i*8+j] >= 38) {
-                val |= ( 1 << (7-j));
+            if(timings[i * 8 + j] >= 38) {
+                val |= (1 << (7 - j));
             }
         }
 #ifdef DHTDEBUG
@@ -125,7 +135,7 @@ int DHT::read() {
     debug("%02x %02x %02x %02x %02x\r\n", _data[0], _data[1], _data[2], _data[3], _data[4]);
 #endif
 
-    if (_data[4] == ((_data[0] + _data[1] + _data[2] + _data[3]) & 0xFF)) {
+    if(_data[4] == ((_data[0] + _data[1] + _data[2] + _data[3]) & 0xFF)) {
         _lastTemperature = calcTemperature();
         _lastHumidity = calcHumidity();
     } else {
@@ -133,7 +143,6 @@ int DHT::read() {
     }
 
     return SUCCESS;
-
 }
 
 int* DHT::getRawData() {
@@ -143,7 +152,7 @@ int* DHT::getRawData() {
 float DHT::calcTemperature() {
     int v;
 
-    switch (_family) {
+    switch(_family) {
         case DHT11:
             v = _data[2];
             return float(v);
@@ -151,9 +160,9 @@ float DHT::calcTemperature() {
             v = _data[2] & 0x7F;
             v *= 256;
             v += _data[3];
-            if (_data[2] & 0x80)
+            if(_data[2] & 0x80)
                 v *= -1;
-            return float(v)/10;
+            return float(v) / 10;
     }
     return 0;
 }
@@ -161,7 +170,7 @@ float DHT::calcTemperature() {
 float DHT::calcHumidity() {
     int v;
 
-    switch (_family) {
+    switch(_family) {
         case DHT11:
             v = _data[0];
             return float(v);
@@ -169,7 +178,7 @@ float DHT::calcHumidity() {
             v = _data[0];
             v *= 256;
             v += _data[1];
-            return float(v)/10;
+            return float(v) / 10;
     }
     return 0;
 }
@@ -183,9 +192,9 @@ float DHT::toKelvin(float celsius) {
 }
 
 float DHT::getTemperature(Unit unit) {
-    if (unit == FARENHEIT)
+    if(unit == FARENHEIT)
         return toFarenheit(_lastTemperature);
-    else if (unit == KELVIN)
+    else if(unit == KELVIN)
         return toKelvin(_lastTemperature);
     else
         return _lastTemperature;
